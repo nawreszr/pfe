@@ -1,0 +1,259 @@
+datasource db {
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id
+  email     String
+  username  String
+  photo     String   @db.Text
+  firstName String
+  lastName  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships      Member[]
+  favorites        Favorite[]     @relation()
+  sentMessages     ChatMessage[]  @relation(name: "Sender")
+  receivedMessages ChatMessage[]  @relation(name: "Recipient")
+  Invitation       Invitation[]   @relation(name: "Inviter")
+  notifications    Notification[] @relation("UserNotifications")
+  auditLogs        AuditLog[]
+}
+
+model Organization {
+  id        String   @id
+  name      String
+  slug      String
+  logo      String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members          Member[]
+  roles            Role[]
+  boards           Board[]
+  orgLimits        OrgLimit[]
+  orgSubscriptions OrgSubscription[]
+  notifications    Notification[]
+  Invitation       Invitation[]
+  auditLogs        AuditLog[]
+}
+
+model Invitation {
+  id             String       @id @default(uuid())
+  inviterId      String
+  inviter        User         @relation(name: "Inviter", fields: [inviterId], references: [id], onDelete: Cascade)
+  inviteeEmail   String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  roleId         String?
+  role           Role?        @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  status         String       @default("pending")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([inviterId])
+  @@index([organizationId])
+  @@index([inviteeEmail])
+  @@index([roleId])
+}
+
+model Role {
+  id           String       @id
+  name         String
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  members     Member[]
+  invitations Invitation[]
+
+  @@index([orgId])
+}
+
+model Member {
+  id           String       @id @default(uuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  roleId       String?
+  role         Role?        @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([userId, orgId])
+  @@index([userId])
+  @@index([orgId])
+  @@index([roleId])
+}
+
+model Board {
+  id            String       @id @default(uuid())
+  orgId         String
+  organization  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  title         String
+  imageId       String
+  imageThumbUrl String       @db.Text
+  imageFullUrl  String       @db.Text
+  imageUserName String       @db.Text
+  imageLinkHTML String       @db.Text
+
+  lists     List[]
+  favorited Favorite[] @relation()
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+}
+
+model List {
+  id    String @id @default(uuid())
+  title String
+  order Int
+
+  boardId String
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  cards Card[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([boardId])
+}
+
+enum PRIORITY {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Card {
+  id          String    @id @default(uuid())
+  title       String
+  description String?   @db.Text
+  dueDate     DateTime?
+  priority    PRIORITY? @default(MEDIUM)
+  order       Int
+
+  listId String
+  list   List   @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  notifications Notification[] @relation("CardNotifications")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([listId])
+}
+
+model Favorite {
+  userId    String
+  boardId   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@id([userId, boardId])
+  @@index([boardId])
+}
+
+enum ACTION {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+enum ENTITY_TYPE {
+  BOARD
+  LIST
+  CARD
+}
+
+model OrgLimit {
+  id           String       @id @default(uuid())
+  orgId        String       @unique
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  count        Int          @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OrgSubscription {
+  id           String       @id @default(uuid())
+  orgId        String       @unique
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  stripeCustomerId       String?   @unique @map(name: "stripe_customer_id")
+  stripeSubscriptionId   String?   @unique @map(name: "stripe_subscription_id")
+  stripePriceId          String?   @map(name: "stripe_price_id")
+  stripeCurrentPeriodEnd DateTime? @map(name: "stripe_current_period_end")
+}
+
+model AuditLog {
+  id           String       @id @default(uuid())
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  action       ACTION
+  entityId     String
+  entityType   ENTITY_TYPE
+  entityTitle  String
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userImage    String       @db.Text
+  userName     String       @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([userId])
+}
+
+model Notification {
+  id           String       @id @default(uuid())
+  userId       String
+  user         User         @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  message      String       @db.Text
+  isRead       Boolean      @default(false)
+  cardId       String
+  card         Card         @relation(name: "CardNotifications", fields: [cardId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([orgId])
+  @@index([cardId])
+}
+
+model ChatMessage {
+  id               String   @id @default(uuid())
+  senderId         String
+  sender           User     @relation(name: "Sender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipientId      String
+  recipient        User     @relation(name: "Recipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  // content          String  @db.Text
+  content          String?  @db.Text
+  filePath         String?  @db.Text
+  originalFileName String?  @db.Text
+  fileType         String?  @db.Text
+  isRead           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([senderId])
+  @@index([recipientId])
+}
