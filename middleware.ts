@@ -16,6 +16,7 @@ export default authMiddleware({
     "/offers",
     "/plan-comparison",
     "/pricing",
+    "/integrations", 
   ],
   afterAuth(auth, req) {
     if (auth.userId && auth.isPublicRoute) {

@@ -69,10 +69,6 @@ export default function ContactForm() {
         onSubmit={form.handleSubmit(onSubmit)}
         className="space-y-6 w-full max-w-md"
       >
-        <h1 className="text-xl font-semibold text-center mb-1 tracking-wide text-gray-900 dark:text-white">
-        Contact Us
-        </h1>
-
         {/* Name Field */}
         <FormField
           control={form.control}
